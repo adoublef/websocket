@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Websocket Playground</title>
+    <script src="https://unpkg.com/htmx.org@1.9.6"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
+</head>
+<body hx-boost="true">
+    <h1>Websocket Playground</h1>
+    <form hx-ext="ws" ws-connect="/ws" ws-send>
+        <label for="send">
+            <span>Send</span>
+            <input type="text" name="send" id="send">
+        </label>
+    </form>
+</body>
+</html>
