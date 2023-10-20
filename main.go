@@ -75,20 +75,37 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var send = make(chan []byte)
+
+	// send
 	go func() {
 		defer conn.Close()
 
 		for {
+			p := <-send
+
+			err = wsutil.WriteServerText(conn, p)
+			if err != nil {
+				continue
+			}
+		}
+	}()
+
+	// read
+	go func() {
+		defer func() {
+			close(send)
+			conn.Close()
+		}()
+
+		for {
 			// nameOfInput:string|int
-			_, op, err := wsutil.ReadClientData(conn)
+			_, err := wsutil.ReadClientText(conn)
 			if err != nil {
 				continue
 			}
 
-			err = wsutil.WriteServerMessage(conn, op, p)
-			if err != nil {
-				continue
-			}
+			send <- p
 		}
 	}()
 }
