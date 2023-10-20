@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
+	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,8 +16,6 @@ import (
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
-	"github.com/nats-io/nats-server/v2/server"
-	"github.com/nats-io/nats.go"
 )
 
 var (
@@ -39,22 +41,8 @@ func main() {
 }
 
 func run(ctx context.Context) (err error) {
-	// nats
-	ns, err := server.NewServer(&server.Options{})
-	if err != nil {
-		return err
-	}
-	ns.Start()
-
-	// nc, err := nats.Connect(ns.ClientURL())
-	nc, err := nats.Connect(os.Getenv("FLY_APP_NAME")+".internal:4222")
-	if err != nil {
-		return err
-	}
-	// ./nats
-
-	http.HandleFunc("/", handleIndex())
-	http.HandleFunc("/ws", handleWs(nc))
+	http.HandleFunc("/", handleIndex)
+	http.HandleFunc("/ws", handleWs)
 
 	sErr := make(chan error)
 	go func() {
@@ -69,43 +57,80 @@ func run(ctx context.Context) (err error) {
 	}
 }
 
-func handleIndex() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		p, err := fsys.ReadFile("index.html")
+func handleIndex(w http.ResponseWriter, r *http.Request) {
+	renderHttp(w, "index.html", nil)
+}
+
+func handleWs(w http.ResponseWriter, r *http.Request) {
+	conn, _, _, err := ws.UpgradeHTTP(r, w)
+	if err != nil {
+		http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
+		return
+	}
+	var send = make(chan []byte)
+
+	go write(conn, send)
+	go read(conn, send)
+}
+
+func write(conn net.Conn, send chan []byte) {
+	defer conn.Close()
+	for {
+		p, err := renderBytes("message.html", <-send)
 		if err != nil {
-			http.Error(w, "failed to read index page", http.StatusInternalServerError)
-			return
+			continue
 		}
-		w.Write(p)
+		err = wsutil.WriteServerText(conn, p)
+		if err != nil {
+			continue
+		}
 	}
 }
 
-func handleWs(nc *nats.Conn) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		conn, _, _, err := ws.UpgradeHTTP(r, w)
+func read(conn net.Conn, send chan []byte) {
+	defer func() {
+		close(send)
+		conn.Close()
+	}()
+	for {
+		// nameOfInput:string|int
+		p, err := wsutil.ReadClientText(conn)
 		if err != nil {
-			http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
-			return
+			continue
 		}
 
-		template, _ := fsys.ReadFile("message.html")
-		sub, err := nc.Subscribe("chat", func(msg *nats.Msg) {
-			wsutil.WriteServerText(conn, template)
-		})
-		if err != nil {
-			http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
-			return
-		}
-		defer sub.Unsubscribe()
+		var msg map[string]any
+		_ = json.Unmarshal(p, &msg)
 
-		for {
-			// nameOfInput:string|int
-			_, err := wsutil.ReadClientText(conn)
-			if err != nil {
-				continue
-			}
-
-			nc.Publish("chat", []byte("hello"))
-		}
+		send <- []byte(msg["send"].(string))
 	}
+}
+
+func renderHttp(w http.ResponseWriter, name string, data any) {
+	t, err := template.New(name).ParseFS(fsys, name)
+	if err != nil {
+		http.Error(w, "failed to parse template", http.StatusInternalServerError)
+		return
+	}
+
+	err = t.Execute(w, data)
+	if err != nil {
+		http.Error(w, "failed to write template", http.StatusInternalServerError)
+		return
+	}
+}
+
+func renderBytes(name string, data any) ([]byte, error) {
+	t, err := template.New(name).ParseFS(fsys, name)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing file: %w", err)
+	}
+
+	var buf bytes.Buffer
+	err = t.Execute(&buf, data)
+	if err != nil {
+		return nil, fmt.Errorf("error writing to buffer: %w", err)
+	}
+
+	return buf.Bytes(), nil
 }
