@@ -46,7 +46,8 @@ func run(ctx context.Context) (err error) {
 	}
 	ns.Start()
 
-	nc, err := nats.Connect(ns.ClientURL())
+	// nc, err := nats.Connect(ns.ClientURL())
+	nc, err := nats.Connect(os.Getenv("FLY_APP_NAME")+".internal:4222")
 	if err != nil {
 		return err
 	}
