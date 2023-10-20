@@ -5,6 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -69,43 +70,39 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := fsys.ReadFile("message.html")
-	if err != nil {
-		http.Error(w, "failed to read index page", http.StatusInternalServerError)
-		return
-	}
-
 	var send = make(chan []byte)
 
-	// send
-	go func() {
-		defer conn.Close()
+	go write(conn, send)
+	go read(conn, send)
+}
 
-		for {
-			p := <-send
+func write(conn net.Conn, send chan []byte) {
+	defer conn.Close()
 
-			err = wsutil.WriteServerText(conn, p)
-			if err != nil {
-				continue
-			}
+	for {
+		p := <-send
+
+		err := wsutil.WriteServerText(conn, p)
+		if err != nil {
+			continue
 		}
+	}
+}
+
+func read(conn net.Conn, send chan []byte) {
+	defer func() {
+		close(send)
+		conn.Close()
 	}()
 
-	// read
-	go func() {
-		defer func() {
-			close(send)
-			conn.Close()
-		}()
-
-		for {
-			// nameOfInput:string|int
-			_, err := wsutil.ReadClientText(conn)
-			if err != nil {
-				continue
-			}
-
-			send <- p
+	p, _ := fsys.ReadFile("message.html")
+	for {
+		// nameOfInput:string|int
+		_, err := wsutil.ReadClientText(conn)
+		if err != nil {
+			continue
 		}
-	}()
+
+		send <- p
+	}
 }
