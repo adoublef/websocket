@@ -5,9 +5,19 @@ tasks:
     desc: List all tasks
     cmds:
       - task --list-all
-  start:
-    desc: Start service
+
+  cache:
+    desc: Cache dependencies
     silent: true
     cmds:
-      - go run ./cmd/websocket/
+      - go mod tidy
+
+  start:
+    desc: Start service
+    deps:
+      - cache
+    silent: true
+    cmds:
+      # - sudo lsof -t -i tcp:8000 | xargs kill -9
+      - go run .
     

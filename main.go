@@ -4,11 +4,15 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/gobwas/ws"
+	"github.com/gobwas/ws/wsutil"
 )
 
 var (
@@ -36,11 +40,13 @@ func main() {
 	}
 }
 
-// sudo lsof -t -i tcp:8000 | xargs kill -9
 func run(ctx context.Context) (err error) {
+	http.HandleFunc("/", handleIndex)
+	http.HandleFunc("/ws", handleWs)
+
 	sErr := make(chan error)
 	go func() {
-		sErr <- http.ListenAndServe(":8000", http.HandlerFunc(handleIndex))
+		sErr <- http.ListenAndServe(":8000", nil)
 	}()
 
 	select {
@@ -61,5 +67,34 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleWs(w http.ResponseWriter, r *http.Request) {
+	conn, _, _, err := ws.UpgradeHTTP(r, w)
+	if err != nil {
+		http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
+		return
+	}
 
+	p, err := message.ReadFile("message.html")
+	if err != nil {
+		http.Error(w, "failed to read index page", http.StatusInternalServerError)
+		return
+	}
+
+	go func() {
+		defer conn.Close()
+
+		for {
+			// nameOfInput:string|int
+			_, op, err := wsutil.ReadClientData(conn)
+			if err != nil {
+				if err != io.EOF {
+				}
+				continue
+			}
+
+			err = wsutil.WriteServerMessage(conn, op, p)
+			if err != nil {
+				continue
+			}
+		}
+	}()
 }
