@@ -21,3 +21,8 @@ tasks:
       # - sudo lsof -t -i tcp:8000 | xargs kill -9
       - go run .
     
+  open:
+    desc: View production
+    silent: true
+    cmds:
+      - fly apps open

@@ -64,7 +64,6 @@ func run(ctx context.Context) (err error) {
 	case err := <-sErr:
 		return fmt.Errorf("main error: starting server: %w", err)
 	case <-ctx.Done():
-		ns.Shutdown()
 		return nil
 	}
 }
@@ -88,8 +87,9 @@ func handleWs(nc *nats.Conn) http.HandlerFunc {
 			return
 		}
 
+		template, _ := fsys.ReadFile("message.html")
 		sub, err := nc.Subscribe("chat", func(msg *nats.Msg) {
-			wsutil.WriteServerText(conn, msg.Data)
+			wsutil.WriteServerText(conn, template)
 		})
 		if err != nil {
 			http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
@@ -97,7 +97,6 @@ func handleWs(nc *nats.Conn) http.HandlerFunc {
 		}
 		defer sub.Unsubscribe()
 
-		template, _ := fsys.ReadFile("message.html")
 		for {
 			// nameOfInput:string|int
 			_, err := wsutil.ReadClientText(conn)
@@ -105,7 +104,7 @@ func handleWs(nc *nats.Conn) http.HandlerFunc {
 				continue
 			}
 
-			nc.Publish("chat", template)
+			nc.Publish("chat", []byte("hello"))
 		}
 	}
 }
