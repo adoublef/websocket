@@ -57,7 +57,7 @@ func run(ctx context.Context) (err error) {
 
 	sErr := make(chan error)
 	go func() {
-		sErr <- http.ListenAndServe(":8000", nil)
+		sErr <- http.ListenAndServe(":8080", nil)
 	}()
 
 	select {
