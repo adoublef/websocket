@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -89,40 +88,24 @@ func handleWs(nc *nats.Conn) http.HandlerFunc {
 			return
 		}
 
-		var send = make(chan []byte)
-
-		go write(conn, send)
-		go read(conn, send)
-	}
-}
-
-func write(conn net.Conn, send chan []byte) {
-	defer conn.Close()
-
-	for {
-		p := <-send
-
-		err := wsutil.WriteServerText(conn, p)
+		sub, err := nc.Subscribe("chat", func(msg *nats.Msg) {
+			wsutil.WriteServerText(conn, msg.Data)
+		})
 		if err != nil {
-			continue
+			http.Error(w, "Failed to connect to socket", http.StatusBadRequest)
+			return
 		}
-	}
-}
+		defer sub.Unsubscribe()
 
-func read(conn net.Conn, send chan []byte) {
-	defer func() {
-		close(send)
-		conn.Close()
-	}()
+		template, _ := fsys.ReadFile("message.html")
+		for {
+			// nameOfInput:string|int
+			_, err := wsutil.ReadClientText(conn)
+			if err != nil {
+				continue
+			}
 
-	p, _ := fsys.ReadFile("message.html")
-	for {
-		// nameOfInput:string|int
-		_, err := wsutil.ReadClientText(conn)
-		if err != nil {
-			continue
+			nc.Publish("chat", template)
 		}
-
-		send <- p
 	}
 }
