@@ -4,7 +4,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -16,11 +15,8 @@ import (
 )
 
 var (
-	//go:embed index.html
-	index embed.FS
-
-	//go:embed message.html
-	message embed.FS
+	//go:embed *.html
+	fsys embed.FS
 )
 
 func main() {
@@ -58,7 +54,7 @@ func run(ctx context.Context) (err error) {
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
-	p, err := index.ReadFile("index.html")
+	p, err := fsys.ReadFile("index.html")
 	if err != nil {
 		http.Error(w, "failed to read index page", http.StatusInternalServerError)
 		return
@@ -73,7 +69,7 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, err := message.ReadFile("message.html")
+	p, err := fsys.ReadFile("message.html")
 	if err != nil {
 		http.Error(w, "failed to read index page", http.StatusInternalServerError)
 		return
@@ -86,8 +82,6 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 			// nameOfInput:string|int
 			_, op, err := wsutil.ReadClientData(conn)
 			if err != nil {
-				if err != io.EOF {
-				}
 				continue
 			}
 
