@@ -76,7 +76,7 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 func write(conn net.Conn, send chan []byte) {
 	defer conn.Close()
 	for {
-		p, err := renderBytes("message.html", <-send)
+		p, err := renderBytes("message.html", string(<-send))
 		if err != nil {
 			continue
 		}
