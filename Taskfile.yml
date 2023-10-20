@@ -1,0 +1,13 @@
+version: 3
+
+tasks:
+  default:
+    desc: List all tasks
+    cmds:
+      - task --list-all
+  start:
+    desc: Start service
+    silent: true
+    cmds:
+      - go run ./cmd/websocket/
+    
